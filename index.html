@@ -97,7 +97,7 @@
         </div>
         <div class="text-xs uppercase text-zinc-400 mt-2">Private Key (0x…)</div>
         <div class="flex gap-2">
-          <textarea id="pk" rows="3" class="field flex-1" placeholder="Demo only: do not use mainnet keys"></textarea>
+          <textarea id="pk" rows="3" class="field flex-1" placeholder="Demo only: do not use production keys"></textarea>
           <button id="copyPk" class="ghost">Copy</button>
         </div>
       </div>
@@ -158,13 +158,17 @@
   <script type="module">
     import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js";
 
-    // RPC config
-    const RPC_PRIMARY = "https://bssc-rpc.bssc.live"; // direct RPC
-    // If you add a proxy later, you can switch to it here:
-    // const RPC_PRIMARY = (location?.origin || "") + "/api/evm";
+    // RPC & provider
+    const RPC_PRIMARY = "https://bssc-rpc.bssc.live";
+    const NETWORK = { chainId: 16979, name: "bssc" };
+    let provider = new ethers.JsonRpcProvider(RPC_PRIMARY, NETWORK);
+
+    // Raw JSON-RPC helper (stable across nodes)
+    async function rpc(method, params = []) {
+      return await provider.send(method, params);
+    }
 
     // State
-    let provider = new ethers.JsonRpcProvider(RPC_PRIMARY);
     let wallet = null;
 
     // DOM helpers
@@ -191,7 +195,8 @@
 
     async function refreshBalance() {
       if (!wallet) return;
-      const wei = await provider.getBalance(wallet.address);
+      const weiHex = await rpc("eth_getBalance", [wallet.address, "latest"]);
+      const wei    = BigInt(weiHex);
       $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
       $("upd").textContent = new Date().toLocaleTimeString();
     }
@@ -226,28 +231,45 @@
     $("copyAddr").onclick=async()=>{ const a=$("addr").textContent.trim(); if(a){ await navigator.clipboard.writeText(a); addLog({type:"ok", msg:"Address copied"});} };
     $("copyPk").onclick=async()=>{ const s=$("pk").value.trim(); if(s){ await navigator.clipboard.writeText(s); addLog({type:"ok", msg:"Private key copied"});} };
 
-    $("ping").onclick=async()=>{
-      try{
-        const t0=performance.now();
-        const [bn, fee] = await Promise.all([provider.getBlockNumber(), provider.getGasPrice()]);
-        const ms = Math.round(performance.now()-t0);
-        $("gas").textContent = `${ethers.formatUnits(fee, "gwei")}`;
+    // Ping using raw eth_* calls
+    $("ping").onclick = async () => {
+      try {
+        const t0 = performance.now();
+        const [blockHex, gasHex] = await Promise.all([
+          rpc("eth_blockNumber", []),
+          rpc("eth_gasPrice", [])
+        ]);
+        const ms   = Math.round(performance.now() - t0);
+        const bn   = parseInt(blockHex, 16);
+        const gwei = Number(BigInt(gasHex)) / 1e9;
+
+        $("gas").textContent = gwei.toFixed(3);
         $("upd").textContent = new Date().toLocaleTimeString();
-        addLog({ msg:`Ping OK (block ${bn}, ${ms}ms)` });
-      }catch(e){ addLog({type:"err", msg:"Ping failed: "+(e.message||e)}); }
+        addLog({ msg: `Ping OK (block ${bn}, ${ms}ms)` });
+      } catch (e) {
+        addLog({ type: "err", msg: "Ping failed: " + (e.message || e) });
+      }
     };
 
-    $("check").onclick=refreshBalance;
+    $("check").onclick = refreshBalance;
 
-    $("max").onclick=async()=>{
-      try{
-        if(!wallet) return addLog({type:"err", msg:"Generate first"});
-        const [wei, fee] = await Promise.all([provider.getBalance(wallet.address), provider.getGasPrice()]);
-        const feeWei = fee * 21000n;
-        const sendable = wei > feeWei ? wei - feeWei : 0n;
+    $("max").onclick = async () => {
+      try {
+        if (!wallet) return addLog({ type: "err", msg: "Generate first" });
+        const [weiHex, gasHex] = await Promise.all([
+          rpc("eth_getBalance", [wallet.address, "latest"]),
+          rpc("eth_gasPrice", [])
+        ]);
+        const wei    = BigInt(weiHex);
+        const gprice = BigInt(gasHex);
+        const feeWei = gprice * 21000n;
+        const sendable = wei > feeWei ? (wei - feeWei) : 0n;
+
         $("amt").value = ethers.formatEther(sendable);
-        addLog({ msg:`Max computed (fee ~ ${ethers.formatUnits(fee, "gwei")} gwei)` });
-      }catch(e){ addLog({type:"err", msg:"Max error: "+(e.message||e)}); }
+        addLog({ msg: `Max computed (gasPrice ~ ${Number(gprice)/1e9} gwei)` });
+      } catch (e) {
+        addLog({ type: "err", msg: "Max error: " + (e.message || e) });
+      }
     };
 
     // Send modal
@@ -255,21 +277,21 @@
     txClose.onclick=async()=>{ txModal.style.display="none"; await new Promise(r=>setTimeout(r,500)); await refreshBalance(); };
     txModal.addEventListener("click", async (e)=>{ if(e.target===txModal){ txModal.style.display="none"; await new Promise(r=>setTimeout(r,500)); await refreshBalance(); } });
 
-    $("send").onclick=async()=>{
-      try{
-        if(!wallet) return addLog({type:"err", msg:"Generate first"});
-        const to = $("to").value.trim();
+    $("send").onclick = async () => {
+      try {
+        if (!wallet) return addLog({ type:"err", msg:"Generate first" });
+        const to  = $("to").value.trim();
         const amt = $("amt").value.trim();
-        if(!ethers.isAddress(to)) return addLog({type:"err", msg:"Recipient must be 0x address"});
-        if(!amt) return addLog({type:"err", msg:"Enter amount"});
+        if (!ethers.isAddress(to)) return addLog({ type:"err", msg:"Recipient must be 0x address" });
+        if (!amt) return addLog({ type:"err", msg:"Enter amount" });
 
+        const gprice = BigInt(await rpc("eth_gasPrice", []));
         const signer = wallet.connect(provider);
-        const fee = await provider.getGasPrice();
         const tx = await signer.sendTransaction({
           to,
           value: ethers.parseEther(amt),
           gasLimit: 21000,
-          gasPrice: fee
+          gasPrice: gprice
         });
 
         // Show modal immediately
@@ -296,8 +318,8 @@
         } else {
           const st = document.getElementById("txState"); st.className="tag err"; st.textContent="FAILED / TIMEOUT";
         }
-      }catch(e){
-        addLog({type:"err", msg:"Send error: "+(e.message||e)});
+      } catch (e) {
+        addLog({ type:"err", msg:"Send error: " + (e.message || e) });
       }
     };
 
