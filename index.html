@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en" class="h-full bg-[#0b0b10] text-zinc-100">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>micro-bssc-wallet — Phantom style (EVM/BSSC)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{ --ph-purple:#6d28d9; --ph-indigo:#4f46e5; --stroke:rgba(255,255,255,.06); }
+    .shell{ max-width:1100px; margin:0 auto; padding:32px 16px }
+    .card{ background:linear-gradient(180deg,#10111a,#0b0b10 65%);
+           border-radius:16px; padding:20px; box-shadow:0 12px 32px rgba(0,0,0,.4);
+           border:1px solid var(--stroke) }
+    .primary{ background-image:linear-gradient(135deg,var(--ph-purple),var(--ph-indigo));
+              color:#fff; border-radius:12px; padding:10px 16px; font-weight:700;
+              box-shadow:0 8px 24px rgba(109,40,217,.35); border:1px solid rgba(255,255,255,.1);
+              transition:.12s ease }
+    .primary:hover{ filter:brightness(1.12); transform:translateY(-1px) }
+    .primary:active{ transform:translateY(0) scale(.98) }
+    .ghost{ background:#ffffff0f; color:#e5e7eb; border-radius:12px; padding:10px 16px;
+            border:1px solid rgba(255,255,255,.1); transition:.12s ease }
+    .ghost:hover{ background:#ffffff1c } .ghost:active{ transform:scale(.98) }
+    .field{ width:100%; background:#0f1117; color:#e5e7eb; border:1px solid var(--stroke);
+            border-radius:12px; padding:10px 12px; outline:none }
+    .field::placeholder{ color:#9ca3af }
+    .mono{ font-variant-numeric:tabular-nums }
+    .divider{ height:1px; background:linear-gradient(90deg,transparent,#ffffff12,transparent); margin:10px 0 }
+    .pill{ display:inline-flex; align-items:center; gap:8px; border-radius:9999px; padding:6px 12px; font-weight:600 }
+    .pill.ok{  background:rgba(34,197,94,.12); color:#86efac; border:1px solid rgba(34,197,94,.28) }
+    .pill.err{ background:rgba(244,63,94,.12); color:#fca5a5; border:1px solid rgba(244,63,94,.28) }
+    .chip{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:9999px;
+           background:#fff; color:#0b0b10; border:1px solid #e5e7eb; font-weight:600 }
+    .log-row{ display:grid; grid-template-columns:110px minmax(0,1fr) auto; align-items:center; gap:12px;
+              padding:10px 12px; border-radius:12px; background:#10111a; border:1px solid var(--stroke) }
+    .tag{ font-size:11px; padding:2px 8px; border-radius:9999px; font-weight:700 }
+    .tag.info{ background:#2a2e6b; color:#c7d2fe } .tag.ok{ background:#0a3c2f; color:#a7f3d0 }
+    .tag.err{ background:#5f1b1b; color:#fecaca }
+    .sig-full{ word-break:break-all; font-family:ui-monospace, Menlo, Consolas, "Courier New", monospace }
+    #logs{ min-height:120px; }
+
+    .modal-back{ position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); z-index:60; display:none }
+    .modal{ max-width:760px; margin:6vh auto; background:#10111a; border:1px solid var(--stroke); border-radius:16px; overflow:hidden }
+    .modal-hd{ display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--stroke) }
+    .modal-bd{ padding:16px 18px }
+  </style>
+</head>
+<body>
+  <main class="shell space-y-6">
+    <header class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl ring-1 ring-white/10"
+          style="background:radial-gradient(110% 110% at top left,rgba(109,40,217,.9),rgba(79,70,229,.9)); box-shadow:0 6px 26px rgba(109,40,217,.4)"></div>
+        <h1 class="text-xl md:text-2xl font-semibold tracking-tight">micro-bssc-wallet</h1>
+        <span class="chip">EVM runtime / BSSC (BNB)</span>
+      </div>
+      <div id="status" class="pill ok" style="display:none">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>HEALTHY</span>
+      </div>
+    </header>
+
+    <section class="grid md:grid-cols-3 gap-4">
+      <div class="card md:col-span-2">
+        <div class="text-xs uppercase text-zinc-400 mb-2">Network</div>
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="text-base text-zinc-100 font-mono">https://bssc-rpc.bssc.live</div>
+          <div class="flex gap-2">
+            <button id="ping" class="ghost">Ping</button>
+            <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BSSC</a>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="grid grid-cols-3 gap-4">
+          <div><div class="text-xs uppercase text-zinc-400">Balance</div><div id="bal" class="text-2xl font-semibold mono mt-1">—</div></div>
+          <div><div class="text-xs uppercase text-zinc-400">Gas price (gwei)</div><div id="fee" class="text-2xl font-semibold mono mt-1">—</div></div>
+          <div><div class="text-xs uppercase text-zinc-400">Last update</div><div id="upd" class="mt-1 text-zinc-300">—</div></div>
+        </div>
+      </div>
+
+      <div class="card space-y-3">
+        <div class="text-xs uppercase text-zinc-400">Quick Actions</div>
+        <div class="flex flex-wrap gap-2">
+          <button id="gen" class="primary">Generate Wallet</button>
+          <button id="recover" class="ghost">Recover Wallet</button>
+          <button id="check" class="ghost">Check Balance</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid md:grid-cols-2 gap-4">
+      <div class="card space-y-3">
+        <div class="text-xs uppercase text-zinc-400">Your Wallet</div>
+        <div class="flex items-center justify-between">
+          <div id="addr" class="truncate mono">—</div>
+          <div class="flex gap-2"><button id="copyAddr" class="ghost">Copy</button></div>
+        </div>
+        <div class="text-xs uppercase text-zinc-400 mt-2">Secret (EVM private key, hex 0x…)</div>
+        <div class="flex gap-2">
+          <textarea id="sec" rows="3" class="field flex-1" placeholder="Demo only: 32-byte hex private key (0x...)"></textarea>
+          <button id="copySec" class="ghost">Copy</button>
+        </div>
+      </div>
+
+      <div class="card space-y-3">
+        <div class="text-xs uppercase text-zinc-400">Send BNB (0x address)</div>
+        <input id="to" class="field" placeholder="Recipient (0x...)"/>
+        <div class="flex gap-2">
+          <input id="amt" class="field" placeholder="Amount (BNB)"/>
+          <button id="max"  class="ghost">Max</button>
+          <button id="send" class="primary">Send</button>
+        </div>
+        <p class="text-sm text-zinc-500">1 BNB = 1,000,000,000,000,000,000 wei</p>
+      </div>
+    </section>
+
+    <section class="card space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="text-xs uppercase text-zinc-400">Activity</div>
+        <button id="clear" class="ghost">Clear</button>
+      </div>
+      <div id="logs" class="space-y-2"></div>
+    </section>
+  </main>
+
+  <!-- Send Result Modal -->
+  <div id="txModal" class="modal-back">
+    <div class="modal">
+      <div class="modal-hd">
+        <div style="font-weight:700">Transaction</div>
+        <button id="txClose" class="ghost">Close</button>
+      </div>
+      <div class="modal-bd" id="txBody"></div>
+    </div>
+  </div>
+
+  <!-- Recover Wallet Modal -->
+  <div id="recModal" class="modal-back">
+    <div class="modal">
+      <div class="modal-hd">
+        <div style="font-weight:700">Recover Wallet</div>
+        <button id="recClose" class="ghost">Close</button>
+      </div>
+      <div class="modal-bd">
+        <div class="text-sm text-zinc-400 mb-2">Paste your EVM private key (hex, 0x...)</div>
+        <textarea id="recInput" rows="4" class="field w-full" placeholder="0x..."></textarea>
+        <div class="mt-3 flex gap-2">
+          <button id="recPaste"  class="ghost">Paste</button>
+          <button id="recImport" class="primary">Import</button>
+        </div>
+        <div class="text-xs text-zinc-500 mt-2">* Demo only. Make sure you trust this device.</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      JsonRpcProvider, Wallet, parseEther, formatEther
+    } from "https://esm.sh/ethers@6.13.2?bundle";
+
+    // --- Network config ---
+    const RPC_URL = "https://bssc-rpc.bssc.live";
+    const CHAIN_ID = 16979; // BSSC testnet
+    const EXPL = "https://explorer.bssc.live";
+
+    // --- State ---
+    let provider = null;
+    let wallet = null;
+
+    // --- Helpers ---
+    const $=(id)=>document.getElementById(id);
+    const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+    function addLog({type="info",msg,hash}){
+      const box=$("logs"); const row=document.createElement("div"); row.className="log-row";
+      const ts=document.createElement("div"); ts.className="mono text-zinc-400"; ts.textContent=new Date().toLocaleTimeString();
+      const body=document.createElement("div"); body.className="truncate";
+      const tag=document.createElement("span"); tag.className=`tag ${type==="ok"?"ok":type==="err"?"err":"info"}`; tag.textContent=type.toUpperCase();
+      body.appendChild(tag);
+      if(hash){
+        const full=document.createElement("div"); full.className="sig-full ml-2"; full.textContent=hash;
+        const btns=document.createElement("div"); btns.className="mt-1 flex gap-2";
+        const cpy=document.createElement("button"); cpy.className="ghost"; cpy.textContent="Copy";
+        cpy.onclick=()=>navigator.clipboard.writeText(hash);
+        const open=document.createElement("button"); open.className="ghost"; open.textContent="Open Explorer";
+        open.onclick=()=>window.open(`${EXPL}/tx/${hash}`,"_blank","noopener");
+        btns.appendChild(cpy); btns.appendChild(open); body.appendChild(btns);
+        body.appendChild(full);
+      } else {
+        const span=document.createElement("span"); span.className="ml-2"; span.textContent=msg; body.appendChild(span);
+      }
+      row.appendChild(ts); row.appendChild(body); box.prepend(row);
+    }
+    function ensureProvider(){
+      if(!provider) provider = new JsonRpcProvider(RPC_URL, CHAIN_ID);
+      return provider;
+    }
+    async function refreshNetworkStats(){
+      try{
+        ensureProvider();
+        const fee = await provider.getFeeData();
+        if(fee.gasPrice){
+          const gwei = Number(fee.gasPrice) / 1e9;
+          $("fee").textContent = gwei.toFixed(2);
+        }
+        $("upd").textContent = new Date().toLocaleTimeString();
+      }catch{}
+    }
+    async function refreshBalance(){
+      try{
+        ensureProvider();
+        if(!wallet) return;
+        const bal = await provider.getBalance(wallet.address);
+        $("bal").textContent = `${Number(formatEther(bal)).toFixed(6)} BNB`;
+        $("upd").textContent = new Date().toLocaleTimeString();
+      }catch{}
+    }
+    function normalizeHexPK(input){
+      const s=input.trim();
+      if(!s) return null;
+      // Accept 0x… or raw 64-hex; reject base64 here (EVM expects 32-byte hex)
+      const t = s.startsWith("0x") ? s : `0x${s}`;
+      if(/^0x[0-9a-fA-F]{64}$/.test(t)) return t;
+      return null;
+    }
+
+    // --- UI wiring ---
+    $("ping").onclick=async()=>{
+      try{
+        ensureProvider();
+        const bn = await provider.getBlockNumber();
+        addLog({msg:`Ping OK (block ${bn})`});
+        await refreshNetworkStats();
+      }catch(e){
+        addLog({type:"err", msg:`Ping failed: ${e.message||e}`});
+      }
+    };
+
+    $("gen").onclick=()=>{
+      ensureProvider();
+      wallet = Wallet.createRandom().connect(provider);
+      $("addr").textContent = wallet.address;
+      $("sec").value = wallet.privateKey; // 0x...
+      addLog({msg:"Generated new EVM wallet"});
+      refreshBalance();
+      refreshNetworkStats();
+    };
+
+    // Recover modal
+    const recModal=$("recModal"), recInput=$("recInput");
+    $("recover").onclick=()=>{ recInput.value=""; recModal.style.display="block"; recInput.focus(); };
+    $("recClose").onclick=()=>{ recModal.style.display="none"; };
+    $("recPaste").onclick=async()=>{ try{ recInput.value=await navigator.clipboard.readText(); }catch{} };
+    $("recImport").onclick=()=>{
+      const raw = normalizeHexPK(recInput.value);
+      if(!raw) return addLog({type:"err", msg:"Private key must be 32-byte hex (0x...)"});
+      try{
+        ensureProvider();
+        wallet = new Wallet(raw, provider);
+        $("addr").textContent = wallet.address;
+        $("sec").value = wallet.privateKey;
+        recModal.style.display="none";
+        addLog({type:"ok", msg:"Recovered wallet"});
+        refreshBalance(); refreshNetworkStats();
+      }catch(e){ addLog({type:"err", msg:"Recover failed: "+(e.message||e)}); }
+    };
+    recModal.addEventListener("click",(e)=>{ if(e.target===recModal) recModal.style.display="none"; });
+
+    $("copyAddr").onclick=async()=>{ const a=$("addr").textContent.trim(); if(a){ await navigator.clipboard.writeText(a); addLog({type:"ok", msg:"Address copied"});} };
+    $("copySec").onclick=async()=>{ const s=$("sec").value.trim(); if(s){ await navigator.clipboard.writeText(s); addLog({type:"ok", msg:"Secret copied"});} };
+
+    $("check").onclick=async()=>{
+      try{
+        if(!wallet) return addLog({type:"err", msg:"Generate first"});
+        await refreshBalance(); await refreshNetworkStats();
+        addLog({msg:`Balance checked`});
+      }catch(e){ addLog({type:"err", msg:"Balance error: "+(e.message||e)}); }
+    };
+
+    $("max").onclick=async()=>{
+      try{
+        if(!wallet) return addLog({type:"err", msg:"Generate first"});
+        const [bal, fee] = await Promise.all([provider.getBalance(wallet.address), provider.getFeeData()]);
+        const gasPrice = fee.gasPrice ?? 0n;
+        const gasLimit = 21000n; // simple transfer
+        const reserve = gasPrice * gasLimit;
+        const maxWei = bal > reserve ? (bal - reserve) : 0n;
+        const maxBNB = Number(formatEther(maxWei));
+        $("amt").value = maxBNB > 0 ? maxBNB.toString() : "0";
+        addLog({msg:"Max computed"});
+      }catch(e){ addLog({type:"err", msg:"Max error: "+(e.message||e)}); }
+    };
+
+    // Send modal
+    const txModal=$("txModal"), txBody=$("txBody"), txClose=$("txClose");
+    txClose.onclick=async()=>{ txModal.style.display="none"; await sleep(500); await refreshBalance(); };
+    txModal.addEventListener("click", async (e)=>{ if(e.target===txModal){ txModal.style.display="none"; await sleep(500); await refreshBalance(); } });
+
+    $("send").onclick=async()=>{
+      try{
+        if(!wallet) return addLog({type:"err", msg:"Generate first"});
+        const toStr = $("to").value.trim();
+        const amtStr = ($("amt").value||"").trim();
+        if(!toStr || !/^0x[0-9a-fA-F]{40}$/.test(toStr)) return addLog({type:"err", msg:"Recipient must be 0x address"});
+        if(!amtStr || isNaN(Number(amtStr)) || Number(amtStr)<=0) return addLog({type:"err", msg:"Enter valid amount"});
+
+        const txResp = await wallet.sendTransaction({ to: toStr, value: parseEther(amtStr) });
+
+        txBody.innerHTML = `
+          <div><strong>Status:</strong> <span id="txState" class="tag info">SENDING</span></div>
+          <div class="mt-2"><strong>Tx Hash</strong></div>
+          <div class="sig-full mt-1">${txResp.hash}</div>
+          <div class="mt-3 flex gap-2">
+            <button id="txCopy" class="ghost">Copy</button>
+            <button id="txOpen" class="ghost">Open Explorer</button>
+          </div>
+        `;
+        document.getElementById("txCopy").onclick=()=>navigator.clipboard.writeText(txResp.hash);
+        document.getElementById("txOpen").onclick=()=>window.open(`${EXPL}/tx/${txResp.hash}`,"_blank","noopener");
+        txModal.style.display="block";
+        addLog({ type:"info", msg:"TX sent", hash: txResp.hash });
+
+        try{
+          const rcp = await txResp.wait();
+          addLog({ type:"ok", msg:`TX confirmed in block ${rcp.blockNumber}`, hash: txResp.hash });
+          document.getElementById("txState").className="tag ok";
+          document.getElementById("txState").textContent="CONFIRMED";
+          await refreshBalance();
+        }catch{
+          document.getElementById("txState").className="tag err";
+          document.getElementById("txState").textContent="TIMEOUT / PENDING";
+        }
+      }catch(e){
+        addLog({type:"err", msg:"Send error: "+(e.message||e)});
+      }
+    };
+
+    $("clear").onclick=()=>{ $("logs").innerHTML=""; };
+  </script>
+</body>
+</html>
