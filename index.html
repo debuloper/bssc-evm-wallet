@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>bssc-evm-wallet — single HTML / no MetaMask</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<title>bssc-evm-wallet — single HTML (raw RPC, no batching)</title>
 <style>
   :root{--bg:#0b0b10;--card:#10111a;--stroke:rgba(255,255,255,.08);--fg:#e5e7eb;--mut:#9ca3af;--pri:#6d28d9;--pri2:#4f46e5}
   html,body{height:100%} body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial}
@@ -24,8 +23,8 @@
 </head>
 <body>
 <main class="shell">
-  <h1 style="margin:0 0 6px 0">bssc-evm-wallet <span class="mut">(single html / no MetaMask)</span></h1>
-  <div class="mut" style="margin-bottom:12px">ブラウザ内で鍵生成→ローカル署名→RPC送信。拡張不要。</div>
+  <h1 style="margin:0 0 6px 0">bssc-evm-wallet <span class="mut">(single html / raw JSON-RPC / no MetaMask)</span></h1>
+  <div class="mut" style="margin-bottom:12px">ブラウザ内で鍵生成→ローカル署名→<b>自前JSON-RPC</b>で送信（バッチ＆並列なし）。</div>
 
   <div class="card">
     <div class="row">
@@ -78,28 +77,41 @@
   </div>
 
   <p class="mut" style="margin-top:16px;font-size:13px">
-    ※ 受け取りは相手があなたのアドレス（0x…）にBSSCネットワークで送るだけ。<br/>
-    ※ 単発JSON-RPCで実装（バッチ無効化）。CORSで止まる場合は別のRPCに変更してください。
+    ※ この実装は <b>常に1回のJSON-RPCだけ</b>を順番に送ります（バッチ禁止・並列禁止）。<br/>
+    ※ 受け取りは相手があなたのアドレス（0x…）にBSSCネットワークで送るだけ。
   </p>
 </main>
 
 <script type="module">
-import {
-  JsonRpcProvider, Wallet, formatEther
-} from "https://esm.sh/ethers@6.13.2?bundle";
+import { Wallet, formatEther, Transaction } from "https://esm.sh/ethers@6.13.2?bundle";
 
 /* ---------- DOM helpers ---------- */
 const $ = (id)=>document.getElementById(id);
 const log = (el, msg) => { el.style.display="block"; el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`; };
 
 /* ---------- State ---------- */
-let provider = null;
-let wallet   = null;
+let RPC_URL = "https://bssc-rpc.bssc.live";
+let wallet  = null;
 const EXPL_BASE = "https://explorer.bssc.live";
 
-/* ---------- BigInt safe parse for 18 decimals ---------- */
+/* ---------- strict single-call JSON-RPC ---------- */
+async function rpc(method, params=[]){
+  const body = { jsonrpc:"2.0", id: Date.now(), method, params };
+  const r = await fetch(RPC_URL, {
+    method:"POST",
+    headers:{ "content-type":"application/json" },
+    body: JSON.stringify(body),
+    cache:"no-store",
+  });
+  const j = await r.json().catch(()=> ({}));
+  if (j?.error) throw new Error(j.error.message || "RPC error");
+  if (j?.result === undefined) throw new Error("RPC missing result");
+  return j.result;
+}
+
+/* ---------- utilities ---------- */
+const toHex = (n)=> "0x" + n.toString(16);
 function parseAmountToWei(str){
-  // Accepts: "1", "0.1", "1.234567890123456789"
   const s = String(str || "").trim();
   if(!/^[0-9]+(\.[0-9]{0,18})?$/.test(s)) throw new Error("Invalid decimal (max 18 dp)");
   const [ints, frac=""] = s.split(".");
@@ -107,94 +119,79 @@ function parseAmountToWei(str){
   return BigInt(ints) * 10n**18n + BigInt(fracPadded);
 }
 
-/* ---------- Provider ---------- */
-function setProvider(url){
-  provider = new JsonRpcProvider(url);
-  try {
-    // disable batching to avoid "missing response / undefined method" issues
-    provider._getConnection().batchMaxCount = 1;
-  } catch {}
-}
-
-async function rpc(method, params=[]){
-  if(!provider) throw new Error("No provider. Click 'Use RPC' first.");
-  return provider.send(method, params);
-}
-
-/* ---------- Basics ---------- */
-async function refreshBalance(){
-  if(!wallet) return;
-  const weiHex = await rpc("eth_getBalance", [wallet.address, "latest"]);
-  const wei = BigInt(weiHex);
-  $("bal").textContent = `${Number(formatEther(wei)).toFixed(6)} BNB`;
-}
-
+/* ---------- basic calls (all sequential) ---------- */
 async function ping(){
   const hex = await rpc("eth_blockNumber", []);
   return parseInt(hex, 16);
 }
-
-async function gasGwei(){
-  const gasHex = await rpc("eth_gasPrice", []);
-  return (Number(BigInt(gasHex)) / 1e9).toFixed(2);
+async function gasPrice(){
+  const hex = await rpc("eth_gasPrice", []);
+  return BigInt(hex); // wei
+}
+async function chainId(){
+  const hex = await rpc("eth_chainId", []);
+  return parseInt(hex, 16);
+}
+async function getBalance(addr){
+  const hex = await rpc("eth_getBalance", [addr, "latest"]);
+  return BigInt(hex);
+}
+async function getNonce(addr, tag="pending"){
+  const hex = await rpc("eth_getTransactionCount", [addr, tag]);
+  return parseInt(hex, 16);
+}
+async function sendRaw(rawTx){
+  return rpc("eth_sendRawTransaction", [rawTx]);
+}
+async function getReceipt(txHash){
+  return rpc("eth_getTransactionReceipt", [txHash]);
 }
 
-/* ---------- UI wire ---------- */
+/* ---------- UI actions ---------- */
 $("btnUseRpc").onclick = async () => {
-  try{
-    setProvider($("rpc").value.trim());
-    await ping();
-    log($("netlog"), "RPC OK (block " + await ping() + ")");
-  }catch(e){
-    log($("netlog"), "RPC error: " + (e.message||e));
-  }
+  try {
+    RPC_URL = $("rpc").value.trim();
+    const bn = await ping();
+    log($("netlog"), "RPC OK (block " + bn + ")");
+  } catch(e){ log($("netlog"), "RPC error: "+(e.message||e)); }
 };
 
 $("btnPing").onclick = async () => {
-  try{
-    const bn = await ping();
-    log($("netlog"), `Ping OK (block ${bn})`);
-  }catch(e){
-    log($("netlog"), "Ping error: " + (e.message||e));
-  }
+  try{ log($("netlog"), `Ping OK (block ${await ping()})`); }
+  catch(e){ log($("netlog"), "Ping error: "+(e.message||e)); }
 };
 
 $("btnGas").onclick = async () => {
   try{
-    const g = await gasGwei();
-    log($("netlog"), `Gas price ~ ${g} gwei`);
-  }catch(e){
-    log($("netlog"), "Gas error: " + (e.message||e));
-  }
+    const g = await gasPrice();
+    const gwei = Number(g) / 1e9;
+    log($("netlog"), `Gas price ~ ${gwei.toFixed(2)} gwei`);
+  }catch(e){ log($("netlog"), "Gas error: "+(e.message||e)); }
 };
 
 $("btnGen").onclick = async () => {
   try{
-    if(!provider) setProvider($("rpc").value.trim());
-    wallet = Wallet.createRandom().connect(provider);
+    wallet = Wallet.createRandom();
     $("addr").textContent = wallet.address;
-    $("pk").value = wallet.privateKey; // 0x...
-    await refreshBalance();
+    $("pk").value = wallet.privateKey;
+    const bal = await getBalance(wallet.address);
+    $("bal").textContent = `${Number(formatEther(bal)).toFixed(6)} BNB`;
     log($("netlog"), "Generated new EVM wallet");
-  }catch(e){
-    log($("netlog"), "Generate error: " + (e.message||e));
-  }
+  }catch(e){ log($("netlog"), "Generate error: "+(e.message||e)); }
 };
 
 $("btnRecover").onclick = async () => {
   try{
-    if(!provider) setProvider($("rpc").value.trim());
     const raw = $("pk").value.trim();
     const pk = raw.startsWith("0x") ? raw : ("0x"+raw);
     if(!/^0x[0-9a-fA-F]{64}$/.test(pk)) throw new Error("Private key must be 32-byte hex (0x...)");
-    wallet = new Wallet(pk, provider);
+    wallet = new Wallet(pk);
     $("addr").textContent = wallet.address;
     $("pk").value = wallet.privateKey;
-    await refreshBalance();
+    const bal = await getBalance(wallet.address);
+    $("bal").textContent = `${Number(formatEther(bal)).toFixed(6)} BNB`;
     log($("netlog"), "Recovered wallet");
-  }catch(e){
-    log($("netlog"), "Recover error: " + (e.message||e));
-  }
+  }catch(e){ log($("netlog"), "Recover error: "+(e.message||e)); }
 };
 
 $("btnCopyPK").onclick = async () => {
@@ -204,28 +201,26 @@ $("btnCopyPK").onclick = async () => {
 };
 
 $("btnRefresh").onclick = async () => {
-  try{ await refreshBalance(); log($("netlog"), "Balance refreshed"); }
-  catch(e){ log($("netlog"), "Balance error: " + (e.message||e)); }
+  try{
+    if(!wallet) throw new Error("Generate/Recover first");
+    const bal = await getBalance(wallet.address);
+    $("bal").textContent = `${Number(formatEther(bal)).toFixed(6)} BNB`;
+    log($("netlog"), "Balance refreshed");
+  }catch(e){ log($("netlog"), "Balance error: "+(e.message||e)); }
 };
 
 $("btnMax").onclick = async () => {
   try{
     if(!wallet) throw new Error("Generate/Recover first");
-    const [weiHex, gasHex] = await Promise.all([
-      rpc("eth_getBalance", [wallet.address, "latest"]),
-      rpc("eth_gasPrice", [])
-    ]);
-    const balWei   = BigInt(weiHex);
-    const gasPrice = BigInt(gasHex);
+    const balWei   = await getBalance(wallet.address);
+    const gasWei   = await gasPrice();
     const gasLimit = 21000n;
-    const reserve  = gasPrice * gasLimit;
+    const reserve  = gasWei * gasLimit;
     const maxWei   = balWei > reserve ? (balWei - reserve) : 0n;
     const max      = Number(formatEther(maxWei));
     $("amt").value = max > 0 ? String(max) : "0";
     log($("netlog"), "Max computed");
-  }catch(e){
-    log($("netlog"), "Max error: " + (e.message||e));
-  }
+  }catch(e){ log($("netlog"), "Max error: "+(e.message||e)); }
 };
 
 $("btnSend").onclick = async () => {
@@ -237,23 +232,43 @@ $("btnSend").onclick = async () => {
     if(!/^0x[0-9a-fA-F]{40}$/.test(to)) throw new Error("Recipient must be 0x-address");
     if(!/^[0-9]+(\.[0-9]{0,18})?$/.test(amt)) throw new Error("Amount invalid (max 18 dp)");
 
-    // Build & sign & send
-    const value = parseAmountToWei(amt);
-    const tx = await wallet.sendTransaction({ to, value }); // batch無効化済み
+    // 必要情報を「順番に」取得（並列禁止）
+    const [cid, nonce, gasWei] = [
+      await chainId(),
+      await getNonce(wallet.address, "pending"),
+      await gasPrice()
+    ];
 
-    const link = `${EXPL_BASE}/tx/${tx.hash}`;
+    const value = parseAmountToWei(amt);
+    const txFields = {
+      to,
+      nonce,                   // number
+      chainId: cid,            // number
+      gasPrice: gasWei,        // bigint(wei)
+      gasLimit: 21000n,        // bigint
+      value                    // bigint
+    };
+
+    // 署名（raw tx 作成）
+    const rawTx = await wallet.signTransaction(txFields);
+    // 送信（自前）
+    const txHash = await sendRaw(rawTx);
+
+    const link = `${EXPL_BASE}/tx/${txHash}`;
     box.style.display="block";
-    box.innerHTML = `Tx Hash:\n${tx.hash}\n\n<a class="link" href="${link}" target="_blank" rel="noreferrer">Open in Explorer</a>`;
+    box.innerHTML = `Tx Hash:\n${txHash}\n\n<a class="link" href="${link}" target="_blank" rel="noreferrer">Open in Explorer</a>`;
     log($("netlog"), "TX sent");
 
-    // Wait for confirmation (optional)
+    // 簡易ポーリング（receipt待ち）
     try{
-      const r = await tx.wait();
-      log($("netlog"), `Confirmed in block ${r.blockNumber}`);
-      await refreshBalance();
-    }catch{
-      log($("netlog"), "Wait timeout / pending");
-    }
+      for(let i=0;i<20;i++){
+        await new Promise(r=>setTimeout(r,1500));
+        const r = await getReceipt(txHash);
+        if(r && r.blockNumber){ log($("netlog"), `Confirmed in block ${parseInt(r.blockNumber,16)}`); break; }
+      }
+      const bal = await getBalance(wallet.address);
+      $("bal").textContent = `${Number(formatEther(bal)).toFixed(6)} BNB`;
+    }catch{}
   }catch(e){
     box.style.display="block";
     box.textContent = "Send error: " + (e.message||e);
@@ -261,8 +276,8 @@ $("btnSend").onclick = async () => {
   }
 };
 
-/* 初期：RPCをセットだけしておく */
-setProvider($("rpc").value.trim());
+/* 初期：RPC設定だけ反映 */
+RPC_URL = $("rpc").value.trim();
 </script>
 </body>
 </html>
