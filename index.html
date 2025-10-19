@@ -67,7 +67,7 @@
         <div class="text-xs uppercase text-zinc-400">Recover Wallet</div>
         <textarea id="recInput" rows="3" class="field w-full" placeholder="Private key (0x…)"></textarea>
         <div class="flex gap-2">
-          <button id="recPaste"  class="ghost">Paste</button>
+          
           <button id="recImport" class="primary">Recover</button>
         </div>
         <div class="text-xs text-zinc-500">Demo only. Do not use production keys.</div>
@@ -120,10 +120,10 @@
         </div>
 
         <div class="card space-y-3">
-          <div class="text-xs uppercase text-zinc-400">Send BSSC (EVM address)</div>
+          <div class="text-xs uppercase text-zinc-400">Send BNB (EVM address)</div>
           <input id="to" class="field" placeholder="Recipient (0x…)"/>
           <div class="flex gap-2">
-            <input id="amt" class="field" placeholder="Amount (BSSC)"/>
+            <input id="amt" class="field" placeholder="Amount (BNB)"/>
             <button id="max" class="ghost">Max</button>
             <button id="send" class="primary">Send</button>
           </div>
@@ -198,7 +198,7 @@
       if (!wallet) return;
       const weiHex = await rpc("eth_getBalance", [wallet.address, "latest"]);
       const wei    = BigInt(weiHex);
-      $("bal").textContent = `${ethers.formatEther(wei)} BSSC`;
+      $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
       $("upd").textContent = new Date().toLocaleTimeString();
     }
 
@@ -210,7 +210,6 @@
       hide($("loginView")); show($("appView")); show($("status"));
       addLog({ msg: "Generated new wallet" });
     };
-    $("recPaste").onclick = async ()=>{ try{ $("recInput").value = await navigator.clipboard.readText(); }catch{} };
     $("recImport").onclick = ()=>{
       const priv = $("recInput").value.trim();
       if(!priv || !priv.startsWith("0x")) return addLog({type:"err", msg:"Invalid private key"});
