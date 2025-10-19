@@ -24,15 +24,13 @@
             border-radius:12px; padding:10px 12px; outline:none }
     .field::placeholder{ color:#9ca3af }
     .mono{ font-variant-numeric:tabular-nums }
-    .pill{ display:inline-flex; align-items:center; gap:8px; border-radius:9999px; padding:6px 12px; font-weight:600 }
-    .pill.ok{  background:rgba(34,197,94,.12); color:#86efac; border:1px solid rgba(34,197,94,.28) }
     .log-row{ display:grid; grid-template-columns:110px minmax(0,1fr) auto; align-items:center; gap:12px;
               padding:10px 12px; border-radius:12px; background:#10111a; border:1px solid var(--stroke) }
     .tag{ font-size:11px; padding:2px 8px; border-radius:9999px; font-weight:700 }
-    .tag.info{ background:#2a2e6b; color:#c7d2fe } .tag.ok{ background:#0a3c2f; color:#a7f3d0 }
-    .tag.err{ background:#5f1b1b; color:#fecaca }
+    .tag.info{ background:#2a2e6b; color:#c7d2fe } .tag.ok{ background:#0a3c2f; color:#a7f3d0 } .tag.err{ background:#5f1b1b; color:#fecaca }
     .sig-full{ word-break:break-all; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace }
     #logs{ min-height:120px; }
+
     .modal-back{ position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); z-index:60; display:none }
     .modal{ max-width:760px; margin:6vh auto; background:#10111a; border:1px solid var(--stroke); border-radius:16px; overflow:hidden }
     .modal-hd{ display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--stroke) }
@@ -49,6 +47,7 @@
           style="background:radial-gradient(110% 110% at top left,rgba(109,40,217,.9),rgba(79,70,229,.9)); box-shadow:0 6px 26px rgba(109,40,217,.4)"></div>
         <h1 class="text-xl md:text-2xl font-semibold tracking-tight">micro-bssc-wallet (EVM)</h1>
       </div>
+      <!-- hidden until login -->
       <div id="networkActions" class="flex gap-2 hidden">
         <button id="ping" class="ghost">Ping</button>
         <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BNB</a>
@@ -141,6 +140,7 @@
   <!-- ethers v6 -->
   <script type="module">
     import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js";
+
     const RPC_URL = "https://bssc-rpc.bssc.live";
 
     async function rpc(method, params = []) {
@@ -155,6 +155,7 @@
     }
 
     let wallet = null;
+
     const $ = (id)=>document.getElementById(id);
     function show(el){ el.classList.remove("hidden"); }
     function hide(el){ el.classList.add("hidden"); }
@@ -183,6 +184,7 @@
       $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
     }
 
+    // LOGIN actions
     $("genLogin").onclick = ()=>{
       wallet = ethers.Wallet.createRandom();
       $("addr").textContent = wallet.address;
@@ -191,7 +193,6 @@
       show($("status")); show($("networkActions"));
       addLog({ msg: "Generated new wallet" });
     };
-
     $("recPaste").onclick = async ()=>{ try{ $("recInput").value = await navigator.clipboard.readText(); }catch{} };
     $("recImport").onclick = ()=>{
       const priv = $("recInput").value.trim();
@@ -207,6 +208,7 @@
       }catch(e){ addLog({type:"err", msg:"Recover failed: "+(e.message||e)}); }
     };
 
+    // App actions
     $("copyAddr").onclick=async()=>{ const a=$("addr").textContent.trim(); if(a){ await navigator.clipboard.writeText(a); addLog({type:"ok", msg:"Address copied"});} };
     $("copyPk").onclick=async()=>{ const s=$("pk").value.trim(); if(s){ await navigator.clipboard.writeText(s); addLog({type:"ok", msg:"Private key copied"});} };
 
@@ -226,8 +228,7 @@
       }
     };
 
-    const doCheck = ()=>refreshBalance();
-    $("checkTop").onclick = doCheck;
+    $("checkTop").onclick = ()=>refreshBalance();
 
     $("max").onclick = async () => {
       try {
@@ -247,6 +248,7 @@
       }
     };
 
+    // Send modal
     const txModal = document.getElementById("txModal");
     const txBody  = document.getElementById("txBody");
     const txClose = document.getElementById("txClose");
@@ -292,4 +294,30 @@
 
         addLog({ type:"info", msg:"TX sent", hash });
 
-        const deadline = Date.now() + 60
+        // Confirm by polling receipt
+        const deadline = Date.now() + 60_000;
+        let receipt = null;
+        while (Date.now() < deadline) {
+          receipt = await rpc("eth_getTransactionReceipt", [hash]);
+          if (receipt && receipt.blockNumber) break;
+          await new Promise(r=>setTimeout(r, 1500));
+        }
+
+        if (receipt && receipt.status === "0x1") {
+          addLog({ type:"ok", msg:"TX confirmed", hash });
+          const st=document.getElementById("txState"); st.className="tag ok"; st.textContent="CONFIRMED";
+          await refreshBalance();
+        } else if (receipt && receipt.status === "0x0") {
+          const st=document.getElementById("txState"); st.className="tag err"; st.textContent="FAILED";
+        } else {
+          const st=document.getElementById("txState"); st.className="tag err"; st.textContent="TIMEOUT / PENDING";
+        }
+      } catch (e) {
+        addLog({ type:"err", msg:"Send error: " + (e.message || e) });
+      }
+    };
+
+    document.getElementById("clear").onclick=()=>{ $("logs").innerHTML=""; };
+  </script>
+</body>
+</html>
