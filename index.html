@@ -102,10 +102,10 @@
       </div>
 
       <div class="card space-y-3">
-        <div class="text-xs uppercase text-zinc-400">Send BSSC (EVM address)</div>
+        <div class="text-xs uppercase text-zinc-400">Send BNB (EVM address)</div>
         <input id="to" class="field" placeholder="Recipient (0x…)"/>
         <div class="flex gap-2">
-          <input id="amt" class="field" placeholder="Amount (BSSC)"/>
+          <input id="amt" class="field" placeholder="Amount (BNB)"/>
           <button id="max"  class="ghost">Max</button>
           <button id="send" class="primary">Send</button>
         </div>
@@ -194,7 +194,7 @@
       if (!wallet) return;
       const weiHex = await rpc("eth_getBalance", [wallet.address, "latest"]);
       const wei    = BigInt(weiHex);
-      $("bal").textContent = `${ethers.formatEther(wei)} BSSC`;
+      $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
       $("upd").textContent = new Date().toLocaleTimeString();
     }
 
