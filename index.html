@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>micro-bssc-wallet (EVM / BSSC)</title>
+  <title>micro-bssc-wallet (EVM / BNB)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root{ --ph-purple:#6d28d9; --ph-indigo:#4f46e5; --stroke:rgba(255,255,255,.06); }
     .shell{ max-width:1100px; margin:0 auto; padding:32px 16px }
-    .card{ background:linear-gradient(180deg,#10111a,#0b0b10 65%); border-radius:16px; padding:20px;
-           box-shadow:0 12px 32px rgba(0,0,0,.4); border:1px solid var(--stroke) }
+    .card{ background:linear-gradient(180deg,#10111a,#0b0b10 65%);
+           border-radius:16px; padding:20px; box-shadow:0 12px 32px rgba(0,0,0,.4);
+           border:1px solid var(--stroke) }
     .primary{ background-image:linear-gradient(135deg,var(--ph-purple),var(--ph-indigo));
               color:#fff; border-radius:12px; padding:10px 16px; font-weight:700;
               box-shadow:0 8px 24px rgba(109,40,217,.35); border:1px solid rgba(255,255,255,.1);
@@ -50,15 +51,15 @@
         <div class="w-9 h-9 rounded-xl ring-1 ring-white/10"
           style="background:radial-gradient(110% 110% at top left,rgba(109,40,217,.9),rgba(79,70,229,.9)); box-shadow:0 6px 26px rgba(109,40,217,.4)"></div>
         <h1 class="text-xl md:text-2xl font-semibold tracking-tight">micro-bssc-wallet (EVM)</h1>
-        <!-- <span class="chip">BSSC (BNB on Solana runtime)</span> -->
       </div>
+      <!-- hidden until login -->
       <div id="networkActions" class="flex gap-2 hidden">
-  <button id="ping" class="ghost">Ping</button>
-  <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BSSC</a>
-</div>
-<div id="status" class="pill ok hidden">
-  <span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>HEALTHY</span>
-</div>
+        <button id="ping" class="ghost">Ping</button>
+        <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BNB</a>
+      </div>
+      <div id="status" class="pill ok hidden">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>HEALTHY</span>
+      </div>
     </header>
 
     <!-- LOGIN VIEW -->
@@ -84,17 +85,21 @@
       <div class="card">
         <div class="flex items-center justify-between mb-3">
           <div class="text-xs uppercase text-zinc-400">Network</div>
-          
         </div>
         <div class="flex items-center justify-between flex-wrap gap-2">
           <div class="text-base text-zinc-100 font-mono">https://bssc-rpc.bssc.live</div>
-          <!-- Check Balance moved here -->
           <button id="checkTop" class="ghost">Check Balance</button>
         </div>
         <div class="divider"></div>
         <div class="grid grid-cols-3 gap-4">
-          <div><div class="text-xs uppercase text-zinc-400">Balance</div><div id="bal" class="text-2xl font-semibold mono mt-1">—</div></div>
-          <div><div class="text-xs uppercase text-zinc-400">Gas (gwei)</div><div id="gas" class="text-2xl font-semibold mono mt-1">—</div></div>
+          <div>
+            <div class="text-xs uppercase text-zinc-400">Balance</div>
+            <div id="bal" class="text-2xl font-semibold mono mt-1">—</div>
+          </div>
+          <div>
+            <div class="text-xs uppercase text-zinc-400">Gas (gwei)</div>
+            <div id="gas" class="text-2xl font-semibold mono mt-1">—</div>
+          </div>
           <div class="flex items-end justify-between">
             <div>
               <div class="text-xs uppercase text-zinc-400">Last update</div>
@@ -120,10 +125,10 @@
         </div>
 
         <div class="card space-y-3">
-          <div class="text-xs uppercase text-zinc-400">Send BSSC (EVM address)</div>
+          <div class="text-xs uppercase text-zinc-400">Send BNB (EVM address)</div>
           <input id="to" class="field" placeholder="Recipient (0x…)"/>
           <div class="flex gap-2">
-            <input id="amt" class="field" placeholder="Amount (BSSC)"/>
+            <input id="amt" class="field" placeholder="Amount (BNB)"/>
             <button id="max" class="ghost">Max</button>
             <button id="send" class="primary">Send</button>
           </div>
@@ -157,7 +162,6 @@
   <script type="module">
     import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js";
 
-    // RPC (raw JSON-RPC, no batching)
     const RPC_URL = "https://bssc-rpc.bssc.live";
 
     async function rpc(method, params = []) {
@@ -198,7 +202,7 @@
       if (!wallet) return;
       const weiHex = await rpc("eth_getBalance", [wallet.address, "latest"]);
       const wei    = BigInt(weiHex);
-      $("bal").textContent = `${ethers.formatEther(wei)} BSSC`;
+      $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
       $("upd").textContent = new Date().toLocaleTimeString();
     }
 
@@ -207,7 +211,8 @@
       wallet = ethers.Wallet.createRandom();
       $("addr").textContent = wallet.address;
       $("pk").value = wallet.privateKey;
-      hide($("loginView")); show($("appView")); show($("status"));
+      hide($("loginView")); show($("appView"));
+      show($("status")); show($("networkActions"));   /* show after login */
       addLog({ msg: "Generated new wallet" });
     };
     $("recPaste").onclick = async ()=>{ try{ $("recInput").value = await navigator.clipboard.readText(); }catch{} };
@@ -218,7 +223,8 @@
         wallet = new ethers.Wallet(priv);
         $("addr").textContent = wallet.address;
         $("pk").value = priv;
-        hide($("loginView")); show($("appView")); show($("status"));
+        hide($("loginView")); show($("appView"));
+        show($("status")); show($("networkActions")); /* show after login */
         addLog({type:"ok", msg:"Recovered wallet"});
         refreshBalance();
       }catch(e){ addLog({type:"err", msg:"Recover failed: "+(e.message||e)}); }
