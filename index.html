@@ -24,11 +24,8 @@
             border-radius:12px; padding:10px 12px; outline:none }
     .field::placeholder{ color:#9ca3af }
     .mono{ font-variant-numeric:tabular-nums }
-    .divider{ height:1px; background:linear-gradient(90deg,transparent,#ffffff12,transparent); margin:10px 0 }
     .pill{ display:inline-flex; align-items:center; gap:8px; border-radius:9999px; padding:6px 12px; font-weight:600 }
     .pill.ok{  background:rgba(34,197,94,.12); color:#86efac; border:1px solid rgba(34,197,94,.28) }
-    .chip{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:9999px;
-           background:#fff; color:#0b0b10; border:1px solid #e5e7eb; font-weight:600 }
     .log-row{ display:grid; grid-template-columns:110px minmax(0,1fr) auto; align-items:center; gap:12px;
               padding:10px 12px; border-radius:12px; background:#10111a; border:1px solid var(--stroke) }
     .tag{ font-size:11px; padding:2px 8px; border-radius:9999px; font-weight:700 }
@@ -52,7 +49,6 @@
           style="background:radial-gradient(110% 110% at top left,rgba(109,40,217,.9),rgba(79,70,229,.9)); box-shadow:0 6px 26px rgba(109,40,217,.4)"></div>
         <h1 class="text-xl md:text-2xl font-semibold tracking-tight">micro-bssc-wallet (EVM)</h1>
       </div>
-      <!-- hidden until login -->
       <div id="networkActions" class="flex gap-2 hidden">
         <button id="ping" class="ghost">Ping</button>
         <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BNB</a>
@@ -83,29 +79,13 @@
     <section id="appView" class="space-y-6 hidden">
       <!-- Network -->
       <div class="card">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-xs uppercase text-zinc-400">Network</div>
-        </div>
-        <div class="flex items-center justify-between flex-wrap gap-2">
-          <div class="text-base text-zinc-100 font-mono">https://bssc-rpc.bssc.live</div>
-          <button id="checkTop" class="ghost">Check Balance</button>
-        </div>
-        <div class="divider"></div>
-        <div class="grid grid-cols-3 gap-4">
+        <div class="text-xs uppercase text-zinc-400 mb-2">Network</div>
+        <div class="flex items-end justify-between">
           <div>
             <div class="text-xs uppercase text-zinc-400">Balance</div>
-            <div id="bal" class="text-2xl font-semibold mono mt-1">—</div>
+            <div id="bal" class="text-2xl font-semibold mono mt-1">— BNB</div>
           </div>
-          <div>
-            <div class="text-xs uppercase text-zinc-400">Gas (gwei)</div>
-            <div id="gas" class="text-2xl font-semibold mono mt-1">—</div>
-          </div>
-          <div class="flex items-end justify-between">
-            <div>
-              <div class="text-xs uppercase text-zinc-400">Last update</div>
-              <div id="upd" class="mt-1 text-zinc-300">—</div>
-            </div>
-          </div>
+          <button id="checkTop" class="ghost">Check Balance</button>
         </div>
       </div>
 
@@ -161,7 +141,6 @@
   <!-- ethers v6 -->
   <script type="module">
     import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js";
-
     const RPC_URL = "https://bssc-rpc.bssc.live";
 
     async function rpc(method, params = []) {
@@ -176,7 +155,6 @@
     }
 
     let wallet = null;
-
     const $ = (id)=>document.getElementById(id);
     function show(el){ el.classList.remove("hidden"); }
     function hide(el){ el.classList.add("hidden"); }
@@ -203,18 +181,17 @@
       const weiHex = await rpc("eth_getBalance", [wallet.address, "latest"]);
       const wei    = BigInt(weiHex);
       $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
-      $("upd").textContent = new Date().toLocaleTimeString();
     }
 
-    // LOGIN actions
     $("genLogin").onclick = ()=>{
       wallet = ethers.Wallet.createRandom();
       $("addr").textContent = wallet.address;
       $("pk").value = wallet.privateKey;
       hide($("loginView")); show($("appView"));
-      show($("status")); show($("networkActions"));   /* show after login */
+      show($("status")); show($("networkActions"));
       addLog({ msg: "Generated new wallet" });
     };
+
     $("recPaste").onclick = async ()=>{ try{ $("recInput").value = await navigator.clipboard.readText(); }catch{} };
     $("recImport").onclick = ()=>{
       const priv = $("recInput").value.trim();
@@ -224,13 +201,12 @@
         $("addr").textContent = wallet.address;
         $("pk").value = priv;
         hide($("loginView")); show($("appView"));
-        show($("status")); show($("networkActions")); /* show after login */
+        show($("status")); show($("networkActions"));
         addLog({type:"ok", msg:"Recovered wallet"});
         refreshBalance();
       }catch(e){ addLog({type:"err", msg:"Recover failed: "+(e.message||e)}); }
     };
 
-    // App actions
     $("copyAddr").onclick=async()=>{ const a=$("addr").textContent.trim(); if(a){ await navigator.clipboard.writeText(a); addLog({type:"ok", msg:"Address copied"});} };
     $("copyPk").onclick=async()=>{ const s=$("pk").value.trim(); if(s){ await navigator.clipboard.writeText(s); addLog({type:"ok", msg:"Private key copied"});} };
 
@@ -244,9 +220,7 @@
         const ms   = Math.round(performance.now() - t0);
         const bn   = parseInt(blockHex, 16);
         const gwei = Number(BigInt(gasHex)) / 1e9;
-        $("gas").textContent = gwei.toFixed(3);
-        $("upd").textContent = new Date().toLocaleTimeString();
-        addLog({ msg: `Ping OK (block ${bn}, ${ms}ms)` });
+        addLog({ msg: `Ping OK (block ${bn}, gas ${gwei.toFixed(3)} gwei, ${ms}ms)` });
       } catch (e) {
         addLog({ type: "err", msg: "Ping failed: " + (e.message || e) });
       }
@@ -273,7 +247,6 @@
       }
     };
 
-    // Send modal
     const txModal = document.getElementById("txModal");
     const txBody  = document.getElementById("txBody");
     const txClose = document.getElementById("txClose");
@@ -308,7 +281,6 @@
         const signed = await wallet.signTransaction(unsignedTx);
         const hash   = await rpc("eth_sendRawTransaction", [signed]);
 
-        // Modal
         txBody.innerHTML = `
           <div><strong>Status:</strong> <span id="txState" class="tag info">SENT</span></div>
           <div class="mt-2"><strong>Hash</strong></div>
@@ -320,30 +292,4 @@
 
         addLog({ type:"info", msg:"TX sent", hash });
 
-        // Confirm by polling receipt
-        const deadline = Date.now() + 60_000;
-        let receipt = null;
-        while (Date.now() < deadline) {
-          receipt = await rpc("eth_getTransactionReceipt", [hash]);
-          if (receipt && receipt.blockNumber) break;
-          await new Promise(r=>setTimeout(r, 1500));
-        }
-
-        if (receipt && receipt.status === "0x1") {
-          addLog({ type:"ok", msg:"TX confirmed", hash });
-          const st=document.getElementById("txState"); st.className="tag ok"; st.textContent="CONFIRMED";
-          await refreshBalance();
-        } else if (receipt && receipt.status === "0x0") {
-          const st=document.getElementById("txState"); st.className="tag err"; st.textContent="FAILED";
-        } else {
-          const st=document.getElementById("txState"); st.className="tag err"; st.textContent="TIMEOUT / PENDING";
-        }
-      } catch (e) {
-        addLog({ type:"err", msg:"Send error: " + (e.message || e) });
-      }
-    };
-
-    document.getElementById("clear").onclick=()=>{ $("logs").innerHTML=""; };
-  </script>
-</body>
-</html>
+        const deadline = Date.now() + 60
