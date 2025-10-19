@@ -31,6 +31,27 @@
     .sig-full{ word-break:break-all; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace }
     #logs{ min-height:120px; }
 
+    /* Small healthy indicator (shown after login) */
+    #status {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 12px;
+      background: rgba(16, 185, 129, .1);
+      color: #34d399;
+      border: 1px solid rgba(16,185,129,.25);
+      border-radius: 8px;
+      padding: 4px 10px;
+    }
+    #status::before {
+      content: "";
+      display: inline-block;
+      width: 7px; height: 7px;
+      background-color: #34d399;
+      border-radius: 50%;
+    }
+
     .modal-back{ position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); z-index:60; display:none }
     .modal{ max-width:760px; margin:6vh auto; background:#10111a; border:1px solid var(--stroke); border-radius:16px; overflow:hidden }
     .modal-hd{ display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--stroke) }
@@ -47,13 +68,12 @@
           style="background:radial-gradient(110% 110% at top left,rgba(109,40,217,.9),rgba(79,70,229,.9)); box-shadow:0 6px 26px rgba(109,40,217,.4)"></div>
         <h1 class="text-xl md:text-2xl font-semibold tracking-tight">micro-bssc-wallet (EVM)</h1>
       </div>
-      <!-- hidden until login -->
-      <div id="networkActions" class="flex gap-2 hidden">
-        <button id="ping" class="ghost">Ping</button>
-        <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BNB</a>
-      </div>
-      <div id="status" class="pill ok hidden">
-        <span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>HEALTHY</span>
+      <div class="flex items-center gap-3">
+        <div id="networkActions" class="flex gap-2 hidden">
+          <button id="ping" class="ghost">Ping</button>
+          <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BNB</a>
+        </div>
+        <div id="status">HEALTHY</div>
       </div>
     </header>
 
@@ -155,7 +175,6 @@
     }
 
     let wallet = null;
-
     const $ = (id)=>document.getElementById(id);
     function show(el){ el.classList.remove("hidden"); }
     function hide(el){ el.classList.add("hidden"); }
@@ -184,13 +203,14 @@
       $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
     }
 
-    // LOGIN actions
+    // Login
     $("genLogin").onclick = ()=>{
       wallet = ethers.Wallet.createRandom();
       $("addr").textContent = wallet.address;
       $("pk").value = wallet.privateKey;
       hide($("loginView")); show($("appView"));
-      show($("status")); show($("networkActions"));
+      document.getElementById("status").style.display = "inline-flex";
+      document.getElementById("networkActions").classList.remove("hidden");
       addLog({ msg: "Generated new wallet" });
     };
     $("recPaste").onclick = async ()=>{ try{ $("recInput").value = await navigator.clipboard.readText(); }catch{} };
@@ -202,7 +222,8 @@
         $("addr").textContent = wallet.address;
         $("pk").value = priv;
         hide($("loginView")); show($("appView"));
-        show($("status")); show($("networkActions"));
+        document.getElementById("status").style.display = "inline-flex";
+        document.getElementById("networkActions").classList.remove("hidden");
         addLog({type:"ok", msg:"Recovered wallet"});
         refreshBalance();
       }catch(e){ addLog({type:"err", msg:"Recover failed: "+(e.message||e)}); }
@@ -294,7 +315,7 @@
 
         addLog({ type:"info", msg:"TX sent", hash });
 
-        // Confirm by polling receipt
+        // confirm by polling receipt
         const deadline = Date.now() + 60_000;
         let receipt = null;
         while (Date.now() < deadline) {
