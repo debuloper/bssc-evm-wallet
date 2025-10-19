@@ -8,9 +8,8 @@
   <style>
     :root{ --ph-purple:#6d28d9; --ph-indigo:#4f46e5; --stroke:rgba(255,255,255,.06); }
     .shell{ max-width:1100px; margin:0 auto; padding:32px 16px }
-    .card{ background:linear-gradient(180deg,#10111a,#0b0b10 65%);
-           border-radius:16px; padding:20px; box-shadow:0 12px 32px rgba(0,0,0,.4);
-           border:1px solid var(--stroke) }
+    .card{ background:linear-gradient(180deg,#10111a,#0b0b10 65%); border-radius:16px; padding:20px;
+           box-shadow:0 12px 32px rgba(0,0,0,.4); border:1px solid var(--stroke) }
     .primary{ background-image:linear-gradient(135deg,var(--ph-purple),var(--ph-indigo));
               color:#fff; border-radius:12px; padding:10px 16px; font-weight:700;
               box-shadow:0 8px 24px rgba(109,40,217,.35); border:1px solid rgba(255,255,255,.1);
@@ -27,7 +26,6 @@
     .divider{ height:1px; background:linear-gradient(90deg,transparent,#ffffff12,transparent); margin:10px 0 }
     .pill{ display:inline-flex; align-items:center; gap:8px; border-radius:9999px; padding:6px 12px; font-weight:600 }
     .pill.ok{  background:rgba(34,197,94,.12); color:#86efac; border:1px solid rgba(34,197,94,.28) }
-    .pill.err{ background:rgba(244,63,94,.12); color:#fca5a5; border:1px solid rgba(244,63,94,.28) }
     .chip{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:9999px;
            background:#fff; color:#0b0b10; border:1px solid #e5e7eb; font-weight:600 }
     .log-row{ display:grid; grid-template-columns:110px minmax(0,1fr) auto; align-items:center; gap:12px;
@@ -41,89 +39,109 @@
     .modal{ max-width:760px; margin:6vh auto; background:#10111a; border:1px solid var(--stroke); border-radius:16px; overflow:hidden }
     .modal-hd{ display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid var(--stroke) }
     .modal-bd{ padding:16px 18px }
+    .hidden{ display:none }
   </style>
 </head>
 <body>
   <main class="shell space-y-6">
+    <!-- Header -->
     <header class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-xl ring-1 ring-white/10"
-          style="background:radial-gradient(110% 110% at top left,rgba(109,40,217,.9),rgba(79,70,229,.9)); box-shadow:0 6px 26px rgba(0,0,0,.4)"></div>
+          style="background:radial-gradient(110% 110% at top left,rgba(109,40,217,.9),rgba(79,70,229,.9)); box-shadow:0 6px 26px rgba(109,40,217,.4)"></div>
         <h1 class="text-xl md:text-2xl font-semibold tracking-tight">micro-bssc-wallet (EVM)</h1>
         <span class="chip">BSSC (BNB on Solana runtime)</span>
       </div>
-      <div id="status" class="pill ok" style="display:none">
+      <div id="status" class="pill ok hidden">
         <span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>HEALTHY</span>
       </div>
     </header>
 
-    <!-- Network -->
-    <section class="grid md:grid-cols-3 gap-4">
-      <div class="card md:col-span-2">
-        <div class="text-xs uppercase text-zinc-400 mb-2">Network</div>
-        <div class="flex items-center justify-between flex-wrap gap-2">
-          <div class="text-base text-zinc-100 font-mono">https://bssc-rpc.bssc.live</div>
+    <!-- LOGIN VIEW -->
+    <section id="loginView" class="grid md:grid-cols-2 gap-4">
+      <div class="card">
+        <div class="text-xs uppercase text-zinc-400 mb-2">Quick Start</div>
+        <button id="genLogin" class="primary w-full">Generate Wallet</button>
+      </div>
+      <div class="card space-y-3">
+        <div class="text-xs uppercase text-zinc-400">Recover Wallet</div>
+        <textarea id="recInput" rows="3" class="field w-full" placeholder="Private key (0x…)"></textarea>
+        <div class="flex gap-2">
+          <button id="recPaste"  class="ghost">Paste</button>
+          <button id="recImport" class="primary">Recover</button>
+        </div>
+        <div class="text-xs text-zinc-500">Demo only. Do not use production keys.</div>
+      </div>
+    </section>
+
+    <!-- APP VIEW -->
+    <section id="appView" class="space-y-6 hidden">
+      <!-- Network -->
+      <div class="card">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs uppercase text-zinc-400">Network</div>
           <div class="flex gap-2">
             <button id="ping" class="ghost">Ping</button>
-            <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BNB</a>
+            <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BSSC</a>
           </div>
+        </div>
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="text-base text-zinc-100 font-mono">https://bssc-rpc.bssc.live</div>
+          <!-- Check Balance moved here -->
+          <button id="checkTop" class="ghost">Check Balance</button>
         </div>
         <div class="divider"></div>
         <div class="grid grid-cols-3 gap-4">
           <div><div class="text-xs uppercase text-zinc-400">Balance</div><div id="bal" class="text-2xl font-semibold mono mt-1">—</div></div>
           <div><div class="text-xs uppercase text-zinc-400">Gas (gwei)</div><div id="gas" class="text-2xl font-semibold mono mt-1">—</div></div>
-          <div><div class="text-xs uppercase text-zinc-400">Last update</div><div id="upd" class="mt-1 text-zinc-300">—</div></div>
+          <div class="flex items-end justify-between">
+            <div>
+              <div class="text-xs uppercase text-zinc-400">Last update</div>
+              <div id="upd" class="mt-1 text-zinc-300">—</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="card space-y-3">
-        <div class="text-xs uppercase text-zinc-400">Quick Actions</div>
-        <div class="flex flex-wrap gap-2">
-          <button id="gen" class="primary">Generate Wallet</button>
-          <button id="recover" class="ghost">Recover Wallet</button>
-          <button id="check" class="ghost">Check Balance</button>
+      <!-- Wallet & Send -->
+      <section class="grid md:grid-cols-2 gap-4">
+        <div class="card space-y-3">
+          <div class="text-xs uppercase text-zinc-400">Your Wallet</div>
+          <div class="flex items-center justify-between">
+            <div id="addr" class="truncate mono">—</div>
+            <div class="flex gap-2"><button id="copyAddr" class="ghost">Copy</button></div>
+          </div>
+          <div class="text-xs uppercase text-zinc-400 mt-2">Private Key (0x…)</div>
+          <div class="flex gap-2">
+            <textarea id="pk" rows="3" class="field flex-1" placeholder="Demo only: do not use production keys"></textarea>
+            <button id="copyPk" class="ghost">Copy</button>
+          </div>
         </div>
-      </div>
-    </section>
 
-    <!-- Wallet / Send -->
-    <section class="grid md:grid-cols-2 gap-4">
-      <div class="card space-y-3">
-        <div class="text-xs uppercase text-zinc-400">Your Wallet</div>
+        <div class="card space-y-3">
+          <div class="text-xs uppercase text-zinc-400">Send BSSC (EVM address)</div>
+          <input id="to" class="field" placeholder="Recipient (0x…)"/>
+          <div class="flex gap-2">
+            <input id="amt" class="field" placeholder="Amount (BSSC)"/>
+            <button id="max" class="ghost">Max</button>
+            <button id="send" class="primary">Send</button>
+          </div>
+          <p class="text-sm text-zinc-500">Simple transfer uses ~21,000 gas.</p>
+        </div>
+      </section>
+
+      <!-- Activity -->
+      <section class="card space-y-3">
         <div class="flex items-center justify-between">
-          <div id="addr" class="truncate mono">—</div>
-          <div class="flex gap-2"><button id="copyAddr" class="ghost">Copy</button></div>
+          <div class="text-xs uppercase text-zinc-400">Activity</div>
+          <button id="clear" class="ghost">Clear</button>
         </div>
-        <div class="text-xs uppercase text-zinc-400 mt-2">Private Key (0x…)</div>
-        <div class="flex gap-2">
-          <textarea id="pk" rows="3" class="field flex-1" placeholder="Demo only: do not use production keys"></textarea>
-          <button id="copyPk" class="ghost">Copy</button>
-        </div>
-      </div>
-
-      <div class="card space-y-3">
-        <div class="text-xs uppercase text-zinc-400">Send BNB (EVM address)</div>
-        <input id="to" class="field" placeholder="Recipient (0x…)"/>
-        <div class="flex gap-2">
-          <input id="amt" class="field" placeholder="Amount (BNB)"/>
-          <button id="max"  class="ghost">Max</button>
-          <button id="send" class="primary">Send</button>
-        </div>
-        <p class="text-sm text-zinc-500">Simple transfer uses ~21,000 gas.</p>
-      </div>
-    </section>
-
-    <!-- Activity -->
-    <section class="card space-y-3">
-      <div class="flex items-center justify-between">
-        <div class="text-xs uppercase text-zinc-400">Activity</div>
-        <button id="clear" class="ghost">Clear</button>
-      </div>
-      <div id="logs" class="space-y-2"></div>
+        <div id="logs" class="space-y-2"></div>
+      </section>
     </section>
   </main>
 
-  <!-- Send Result Modal (no copy button) -->
+  <!-- Send Result Modal -->
   <div id="txModal" class="modal-back">
     <div class="modal">
       <div class="modal-hd">
@@ -134,29 +152,11 @@
     </div>
   </div>
 
-  <!-- Recover Wallet Modal -->
-  <div id="recModal" class="modal-back">
-    <div class="modal">
-      <div class="modal-hd">
-        <div style="font-weight:700">Recover Wallet</div>
-        <button id="recClose" class="ghost">Close</button>
-      </div>
-      <div class="modal-bd">
-        <div class="text-sm text-zinc-400 mb-2">Paste your private key (0x…)</div>
-        <textarea id="recInput" rows="3" class="field w-full" placeholder="0x…"></textarea>
-        <div class="mt-3 flex gap-2">
-          <button id="recPaste"  class="ghost">Paste</button>
-          <button id="recImport" class="primary">Import</button>
-        </div>
-        <div class="text-xs text-zinc-500 mt-2">Demo only. Do not use production keys.</div>
-      </div>
-    </div>
-  </div>
-
   <!-- ethers v6 -->
   <script type="module">
     import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js";
 
+    // RPC (raw JSON-RPC, no batching)
     const RPC_URL = "https://bssc-rpc.bssc.live";
 
     async function rpc(method, params = []) {
@@ -173,6 +173,9 @@
     let wallet = null;
 
     const $ = (id)=>document.getElementById(id);
+    function show(el){ el.classList.remove("hidden"); }
+    function hide(el){ el.classList.add("hidden"); }
+
     function addLog({type="info", msg, hash}){
       const box=$("logs"); const row=document.createElement("div"); row.className="log-row";
       const ts=document.createElement("div"); ts.className="mono text-zinc-400"; ts.textContent=new Date().toLocaleTimeString();
@@ -194,35 +197,33 @@
       if (!wallet) return;
       const weiHex = await rpc("eth_getBalance", [wallet.address, "latest"]);
       const wei    = BigInt(weiHex);
-      $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
+      $("bal").textContent = `${ethers.formatEther(wei)} BSSC`;
       $("upd").textContent = new Date().toLocaleTimeString();
     }
 
-    $("gen").onclick = ()=>{
+    // LOGIN actions
+    $("genLogin").onclick = ()=>{
       wallet = ethers.Wallet.createRandom();
       $("addr").textContent = wallet.address;
       $("pk").value = wallet.privateKey;
+      hide($("loginView")); show($("appView")); show($("status"));
       addLog({ msg: "Generated new wallet" });
     };
-
-    const recModal=$("recModal"), recInput=$("recInput");
-    $("recover").onclick=()=>{ recInput.value=""; recModal.style.display="block"; recInput.focus(); };
-    $("recClose").onclick=()=>{ recModal.style.display="none"; };
-    $("recPaste").onclick=async()=>{ try{ recInput.value=await navigator.clipboard.readText(); }catch{} };
-    $("recImport").onclick=()=> {
-      const priv = recInput.value.trim();
+    $("recPaste").onclick = async ()=>{ try{ $("recInput").value = await navigator.clipboard.readText(); }catch{} };
+    $("recImport").onclick = ()=>{
+      const priv = $("recInput").value.trim();
       if(!priv || !priv.startsWith("0x")) return addLog({type:"err", msg:"Invalid private key"});
       try{
         wallet = new ethers.Wallet(priv);
         $("addr").textContent = wallet.address;
         $("pk").value = priv;
-        recModal.style.display = "none";
+        hide($("loginView")); show($("appView")); show($("status"));
         addLog({type:"ok", msg:"Recovered wallet"});
         refreshBalance();
       }catch(e){ addLog({type:"err", msg:"Recover failed: "+(e.message||e)}); }
     };
-    recModal.addEventListener("click",(e)=>{ if(e.target===recModal) recModal.style.display="none"; });
 
+    // App actions
     $("copyAddr").onclick=async()=>{ const a=$("addr").textContent.trim(); if(a){ await navigator.clipboard.writeText(a); addLog({type:"ok", msg:"Address copied"});} };
     $("copyPk").onclick=async()=>{ const s=$("pk").value.trim(); if(s){ await navigator.clipboard.writeText(s); addLog({type:"ok", msg:"Private key copied"});} };
 
@@ -244,7 +245,8 @@
       }
     };
 
-    $("check").onclick = refreshBalance;
+    const doCheck = ()=>refreshBalance();
+    $("checkTop").onclick = doCheck;
 
     $("max").onclick = async () => {
       try {
@@ -265,11 +267,13 @@
     };
 
     // Send modal
-    const txModal=$("txModal"), txBody=$("txBody"), txClose=$("txClose");
-    txClose.onclick=async()=>{ txModal.style.display="none"; await new Promise(r=>setTimeout(r,500)); await refreshBalance(); };
+    const txModal = document.getElementById("txModal");
+    const txBody  = document.getElementById("txBody");
+    const txClose = document.getElementById("txClose");
+    txClose.onclick = async ()=>{ txModal.style.display="none"; await new Promise(r=>setTimeout(r,500)); await refreshBalance(); };
     txModal.addEventListener("click", async (e)=>{ if(e.target===txModal){ txModal.style.display="none"; await new Promise(r=>setTimeout(r,500)); await refreshBalance(); } });
 
-    $("send").onclick = async () => {
+    document.getElementById("send").onclick = async () => {
       try {
         if (!wallet) return addLog({ type:"err", msg:"Generate first" });
         const to  = $("to").value.trim();
@@ -297,7 +301,7 @@
         const signed = await wallet.signTransaction(unsignedTx);
         const hash   = await rpc("eth_sendRawTransaction", [signed]);
 
-        // modal
+        // Modal
         txBody.innerHTML = `
           <div><strong>Status:</strong> <span id="txState" class="tag info">SENT</span></div>
           <div class="mt-2"><strong>Hash</strong></div>
@@ -309,7 +313,7 @@
 
         addLog({ type:"info", msg:"TX sent", hash });
 
-        // confirm
+        // Confirm by polling receipt
         const deadline = Date.now() + 60_000;
         let receipt = null;
         while (Date.now() < deadline) {
@@ -332,7 +336,7 @@
       }
     };
 
-    $("clear").onclick=()=>{ $("logs").innerHTML=""; };
+    document.getElementById("clear").onclick=()=>{ $("logs").innerHTML=""; };
   </script>
 </body>
 </html>
