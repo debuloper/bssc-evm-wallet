@@ -1,26 +1,17 @@
-// /api/evm — Edge Function proxy for Solana JSON-RPC
-export const config = { runtime: 'edge' };
-
-const RPC_URL = 'https://bssc-rpc.bssc.live';
-const cors = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'POST, OPTIONS',
-  'access-control-allow-headers': 'content-type'
-};
-
-export default async function handler(req) {
-  try {
-    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (req.method !== 'POST') {
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'POST required' } }),
-        { status: 405, headers: { 'content-type': 'application/json', ...cors } });
-    }
-    const raw = await req.text();
-    const up  = await fetch(RPC_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: raw || '{}' });
-    const txt = await up.text();
-    return new Response(txt, { status: up.status, headers: { 'content-type': 'application/json', ...cors } });
-  } catch (e) {
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32000, message: String(e) } }),
-      { status: 500, headers: { 'content-type': 'application/json', ...cors } });
+// /pages/api/evm.ts
+export default async function handler(req, res) {
+  // バッチ(array)で来たら1件ずつ順番に投げる
+  const body = Array.isArray(req.body) ? req.body : [req.body];
+  const results = [];
+  for (const item of body) {
+    const r = await fetch("https://bssc-rpc.bssc.live", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(item),
+      cache: "no-store",
+    });
+    results.push(await r.json());
   }
+  res.setHeader("content-type", "application/json");
+  res.status(200).send(Array.isArray(req.body) ? results : results[0]);
 }
