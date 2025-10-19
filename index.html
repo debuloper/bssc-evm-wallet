@@ -67,7 +67,7 @@
         <div class="text-xs uppercase text-zinc-400">Recover Wallet</div>
         <textarea id="recInput" rows="3" class="field w-full" placeholder="Private key (0x…)"></textarea>
         <div class="flex gap-2">
-          
+          <button id="recPaste"  class="ghost">Paste</button>
           <button id="recImport" class="primary">Recover</button>
         </div>
         <div class="text-xs text-zinc-500">Demo only. Do not use production keys.</div>
@@ -78,28 +78,29 @@
     <section id="appView" class="space-y-6 hidden">
       <!-- Network -->
       <div class="card">
-        <!-- <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-3">
           <div class="text-xs uppercase text-zinc-400">Network</div>
           <div class="flex gap-2">
             <button id="ping" class="ghost">Ping</button>
-            <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BNB</a>
-          </div> 
+            <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BSSC</a>
+          </div>
         </div>
         <div class="flex items-center justify-between flex-wrap gap-2">
           <div class="text-base text-zinc-100 font-mono">https://bssc-rpc.bssc.live</div>
-          
+          <!-- Check Balance moved here -->
+          <button id="checkTop" class="ghost">Check Balance</button>
         </div>
-        <div class="divider"></div> -->
-        <div class="flex items-center justify-between mt-2">
-  <div>
-    <div class="text-xs uppercase text-zinc-400">Balance</div>
-    <div id="bal" class="text-2xl font-semibold mono mt-1">—</div>
-  </div>
-  <div class="flex gap-2">
-    <button id="checkTop" class="ghost">Check Balance</button>
-    <a class="ghost" target="_blank" rel="noreferrer" href="https://bssc.live/#faucet">Get Test BNB</a>
-  </div>
-</div>
+        <div class="divider"></div>
+        <div class="grid grid-cols-3 gap-4">
+          <div><div class="text-xs uppercase text-zinc-400">Balance</div><div id="bal" class="text-2xl font-semibold mono mt-1">—</div></div>
+          <div><div class="text-xs uppercase text-zinc-400">Gas (gwei)</div><div id="gas" class="text-2xl font-semibold mono mt-1">—</div></div>
+          <div class="flex items-end justify-between">
+            <div>
+              <div class="text-xs uppercase text-zinc-400">Last update</div>
+              <div id="upd" class="mt-1 text-zinc-300">—</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Wallet & Send -->
@@ -118,10 +119,10 @@
         </div>
 
         <div class="card space-y-3">
-          <div class="text-xs uppercase text-zinc-400">Send BNB (EVM address)</div>
+          <div class="text-xs uppercase text-zinc-400">Send BSSC (EVM address)</div>
           <input id="to" class="field" placeholder="Recipient (0x…)"/>
           <div class="flex gap-2">
-            <input id="amt" class="field" placeholder="Amount (BNB)"/>
+            <input id="amt" class="field" placeholder="Amount (BSSC)"/>
             <button id="max" class="ghost">Max</button>
             <button id="send" class="primary">Send</button>
           </div>
@@ -196,7 +197,7 @@
       if (!wallet) return;
       const weiHex = await rpc("eth_getBalance", [wallet.address, "latest"]);
       const wei    = BigInt(weiHex);
-      $("bal").textContent = `${ethers.formatEther(wei)} BNB`;
+      $("bal").textContent = `${ethers.formatEther(wei)} BSSC`;
       $("upd").textContent = new Date().toLocaleTimeString();
     }
 
@@ -208,6 +209,7 @@
       hide($("loginView")); show($("appView")); show($("status"));
       addLog({ msg: "Generated new wallet" });
     };
+    $("recPaste").onclick = async ()=>{ try{ $("recInput").value = await navigator.clipboard.readText(); }catch{} };
     $("recImport").onclick = ()=>{
       const priv = $("recInput").value.trim();
       if(!priv || !priv.startsWith("0x")) return addLog({type:"err", msg:"Invalid private key"});
